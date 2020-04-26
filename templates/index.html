@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF8"/>
+    <title>IMDB Home</title>
+</head>
+<body>
+    <img src='https://static.amazon.jobs/teams/53/images/IMDb_Header_Page.jpg?1501027252' width="700" height="200">
+    <h1>Welcome to the IMDB Top 250 Movies!</h1>
+
+<!-- First Vis -->
+    <h2>Want to get a general sense of top-rated IMDB movies?</h2>
+    <form action='/movie_detail' method='POST'>
+    <p>
+    I would like to view Top <input name="rank" type="text"/> (must provide with a number) Movies.<br/>
+    I would like to see movies from <input name="country" type="text"/> (Country). (Leave if blank if you want to know the global result)<br/>
+    </p>
+    <input type='submit' value='Get Movies!'/>
+    </form>
+
+<!-- Second Vis -->
+    <form action='/movie_year' method='POST'>
+    <h2>Do you know the peak year for most popular movies?</h2>
+    <p>
+    I would like to know the peak year for <input name="country_year" type="text"/> (Country). (Leave if blank if you want to know the global result)<br/>
+    </p>
+    <input type='submit' value='Get Peak Year!'/>
+    </form>
+
+<!-- Third Vis -->
+    <h2>Take a look at the hub for most popular movies!</h2>
+    <a href='/movie_rating'>Popular Movie Hub!</a>
+
+<!-- Fourth Vis -->
+    <h2>Higher Rating, the higher grossing of the movie?</h1>
+    <a href='/movie_gross'> Explore the world gross for popular movies!</a>
+
+<!-- Fifth Vis -->
+    <h2>Country with most talented directors.</h1>
+    <a href='/directors'> Know more about directors of popular movies!</a>
+</body>
+</html>

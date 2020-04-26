@@ -6,7 +6,12 @@
 from bs4 import BeautifulSoup
 import requests, re, csv
 import json
+import pandas as pd
 import time, sqlite3
+from flask import Flask, render_template, request
+import plotly.graph_objects as go
+import plotly.express as px
+import numpy as np 
 
 CACHE_FILE_NAME = 'cache.json'
 CACHE_DICT = {}
@@ -90,59 +95,8 @@ def make_url_request_using_cache(url, cache):
         save_cache(cache)
         return cache[url]
 
+
 ##### STEP TWO: GET DATA FROM IMDB #####
-# class Movie:
-#     '''Top rated movie from IMDB
-
-#     Instance Attributes
-#     -------------------
-#     MovieTitle: string
-#         the title of a movie (e.g. 'The Shawshank Redemption')
-#         some sites have blank category.
-    
-#     ReleaseYear: string
-#         the release year of a movie (e.g. '1994')
-
-#     Director: string
-#         the director name of a movie (e.g. 'Frank Darabont')
-
-#     Country: string
-#         the produce country of a movie (e.g. 'USA')
-
-#     ImdbRating: string
-#         the phone of a movie (e.g. '9.3')
-    
-#     Vote: string
-#         the vote number of a movie (e.g. '2,219,117')
-
-#     URL: string
-#         the URL of the IMDB page of a moviw 
-
-#     '''
-#     def __init__(self, MovieTitle, ReleaseYear, Director, Country, ImdbRating, Vote, URL):
-#         self.MovieTitle = MovieTitle
-#         self.ReleaseYear = ReleaseYear 
-#         self.Director = Director
-#         self.Country = Country
-#         self.ImdbRating = ImdbRating
-#         self.Vote = Vote
-#         self.URL = URL
-
-#     # def info(self):
-#     #     '''Get the information of the name, category, address, zipcode, phone of the site.
-
-#     #     Parameters
-#     #     ----------
-#     #     none
-
-#     #     Returns
-#     #     -------
-#     #     str
-#     #         The information of the site
-#     #     '''
-#     #     return f"{self.name} ({self.category}): {self.address} {self.zipcode}"
-
-
 def build_movie_url_dict():
     ''' Make a dictionary that maps top rated movie name to movie page url from "https://www.imdb.com/chart/top/"
 
@@ -212,6 +166,7 @@ def get_movie_list(movie_url):
     movie_instance = [MovieTitle, Director, Country, ReleaseYear, ImdbRating, Vote, GrossUSA, GrossWorld,URL]
     return movie_instance
 
+
 def get_director_list(movie_url):
     '''Make a diector instances list from a movie URL.
     
@@ -253,6 +208,7 @@ def get_director_list(movie_url):
     director_instance = [DirectorName,BornYear,BornCountry,BornState,Height]
     return director_instance
 
+
 def write_csv(filepath, data):
     '''
     Write <data> to the .csv file specified by <filename>
@@ -271,6 +227,7 @@ def write_csv(filepath, data):
         wr = csv.writer(f)
         for row in data:
             wr.writerow(row)
+
 
 ##### STEP THREE: BUILD DATABASE #####
 def create_imdb_db():
@@ -313,6 +270,7 @@ def create_imdb_db():
     cur.execute(drop_movie)
     cur.execute(create_movie)
 
+
 def load_movies():
     file_contents = open('movie_table.csv', 'r')
     csv_reader = csv.reader(file_contents)
@@ -350,6 +308,7 @@ def load_movies():
     conn.commit()
     conn.close()
 
+
 def load_directors(): 
     file_contents = open('director_table.csv', 'r')
     csv_reader = csv.reader(file_contents)
@@ -372,19 +331,180 @@ def load_directors():
     conn.commit()
     conn.close()
 
-##### STEP FOUR: Interactive choices
-# def get_top_movies(num):
 
-# def pop_movie_year():
+##### STEP FOUR: Interactive choices #####
+app = Flask(__name__)
 
-# def pop_movie_country_ave_vote():
+@app.route('/')
+def index():
+    return render_template('index.html')
 
-# def pop_movie_rating_gross():
 
-# def pop_ave_height_director_country():
+##### First vis: Movie table #####
+def get_top_movies(number=None, country = None):
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    limit = f'LIMIT {number}'
+    where_movie = ''
+    if (country != None):
+        where_movie = f'WHERE Country = "{country}"'
+    
+    q = f'''
+        SELECT MovieTitle, ReleaseYear, Country, DirectorName, ImdbRating, Vote
+        FROM Movies
+        JOIN Directors
+        ON DirectorId = Directors.Id
+        {where_movie}
+        {limit}
+    '''
+    data = cur.execute(q).fetchall()
+    conn.close()
+    return data
 
-# def commend():
 
+@app.route('/movie_detail', methods=['POST'])
+def bars():
+    num = request.form['rank']
+    country = request.form['country']
+    if country == '':
+        country = None
+    results = get_top_movies(number = num,country = country)
+    return render_template('table.html', results=results,
+        country=country)
+
+
+##### Second vis: Movie Peak Year #####
+def pop_movie_year(country = None):
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    where_movie = ''
+    if (country != None):
+        where_movie = f'WHERE Country = "{country}"'
+    q = f'''
+        SELECT ReleaseYear
+        FROM Movies
+        {where_movie}
+        '''
+    data = cur.execute(q).fetchall()
+    df = pd.DataFrame(data)
+    df.columns = ['ReleaseYear']
+    conn.close()
+    return df
+
+
+@app.route('/movie_year', methods=['POST'])
+def year():
+    country = request.form['country_year']
+    if country == '':
+        country = None
+    df = pop_movie_year(country)
+    years = df['ReleaseYear'].value_counts().keys().tolist()
+    counts = df['ReleaseYear'].value_counts().tolist()
+    bars_data = go.Bar(x=years, y=counts)
+    fig = go.Figure(data=bars_data)
+    fig.update_layout(title="Years for most popular movies", xaxis_title="Year", yaxis_title="Movie counts")
+    div = fig.to_html(full_html=False)
+    return render_template("plot1.html", plot1_div=div)
+
+
+##### Third vis: Movie Rating #####
+def pop_movie_country_ave_vote():
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    q = f'''
+        SELECT Country, ImdbRating, Vote
+        FROM Movies
+        '''
+    data = cur.execute(q).fetchall()
+    conn.close()
+    df = pd.DataFrame(data)
+    df.columns = ['Country', 'ImdbRating','Vote']
+    return df
+
+
+@app.route('/movie_rating')
+def rating():
+    df = pop_movie_country_ave_vote()
+    country = df.groupby(['Country']).mean().reset_index()[['Country']].round(1).Country.tolist()
+    rating = df.groupby(['Country']).mean().reset_index()[['ImdbRating']].round(1).ImdbRating.tolist()
+    vote = df.groupby(['Country']).mean().reset_index()[['Vote']].round(1).Vote.tolist()
+    count = df.groupby(['Country']).count().reset_index()[['Vote']].Vote.tolist()
+    fig = px.scatter(x = rating, y = vote, size=count,color= country, hover_name= country, size_max=60, 
+            range_x=[8,9], range_y=[0,1600000])
+    fig.update_layout(title="Hub for most popular movies", xaxis_title="Average IMDB Rating", yaxis_title="Average Votes")
+    div = fig.to_html(full_html=False)
+    return render_template("plot2.html", plot2_div=div)
+
+
+##### Fourth vis: Movie Gross #####
+def pop_movie_rating_gross():
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    q = f'''
+        SELECT MovieTitle, ImdbRating, GrossWorld, ReleaseYear
+        FROM Movies
+        '''
+    data = cur.execute(q).fetchall()
+    conn.close()
+    df = pd.DataFrame(data)
+    df.columns = ['MovieTitle', 'ImdbRating', 'GrossWorld', 'ReleaseYear']
+    df['Time'] = np.where(df['ReleaseYear'] < 1950 , '1940s','later')
+    df.loc[(df.ReleaseYear < 1960)&(df.ReleaseYear >= 1950),'Time']='1950s'
+    df.loc[(df.ReleaseYear < 1970)&(df.ReleaseYear >= 1960),'Time']='1960s'
+    df.loc[(df.ReleaseYear < 1980)&(df.ReleaseYear >= 1970),'Time']='1970s'
+    df.loc[(df.ReleaseYear < 1990)&(df.ReleaseYear >= 1980),'Time']='1980s'
+    df.loc[(df.ReleaseYear < 2000)&(df.ReleaseYear >= 1990),'Time']='1990s'
+    df.loc[(df.ReleaseYear < 2010)&(df.ReleaseYear >= 2000),'Time']='2000s'
+    df.loc[(df.ReleaseYear < 2020)&(df.ReleaseYear >= 2010),'Time']='2010s'
+    df.dropna(how='all')
+    return df
+
+
+@app.route('/movie_gross')
+def gross():
+    df = pop_movie_rating_gross()
+    fig = px.scatter(df, x = 'ImdbRating', y = 'GrossWorld', color= 'ImdbRating', hover_name= 'MovieTitle', animation_frame="Time", 
+            category_orders={'Time':['1940s','1950s','1960s','1970s','1980s','1990s','2000s','2010s']}, 
+            animation_group='MovieTitle', log_y = True)
+    fig.update_layout(xaxis_title="IMDB Rating", yaxis_title="World Gross")
+    div = fig.to_html(full_html=False)
+    return render_template("plot3.html", plot3_div=div)
+
+
+##### Fifth vis: Directors #####
+def pop_director_country():
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    q = f'''
+        SELECT ImdbRating, BornCountry, BornState, DirectorName
+        FROM Directors
+        JOIN Movies
+        ON Directors.Id = Movies.DirectorId
+        GROUP BY DirectorName
+        '''
+    data = cur.execute(q).fetchall()
+    conn.close()
+    df = pd.DataFrame(data)
+    df.columns = ['Rating', 'BornCountry', 'BornState','DirectorName']
+    df = df.replace('Austria-Hungary [now Austria]','Austria')
+    df = df.replace('Czechoslovakia [now Czech Republic]','Czech Republic')
+    df = df.replace('Austria-Hungary [now Hungary]','Hungary')
+    df = df.loc[~((df['BornCountry']=='No info'))]
+    BornCountry = df.BornCountry.tolist()
+    BornCountry = [item.replace(']','') for item in BornCountry]
+    df['BornCountry']=BornCountry
+    return df
+
+
+@app.route('/directors')
+def director():
+    df = pop_director_country()
+    fig = px.treemap(df, path=['BornCountry', 'BornState'], values='Rating')
+    div = fig.to_html(full_html=False)
+    return render_template("plot4.html", plot4_div=div)
+
+
+##### Main Function #####
 if __name__ == "__main__":
     CACHE_DICT = open_cache()
     movie_list = build_movie_url_dict()
@@ -409,4 +529,6 @@ if __name__ == "__main__":
     load_directors()
     load_movies()
 
-    ## 
+    ## Using Flask to present visualizations 
+    app.run(debug=True)
+

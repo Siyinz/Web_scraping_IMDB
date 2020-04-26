@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF8"/>
+    <title>IMDB Movies: Results</title>
+    <style>
+        table, th, td {
+            border: 1px solid black;
+            border-collapse: collapse;
+            padding: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Top Rated IMDB Movies</h1>
+    <table>
+        <tr>
+            <th>MovieTitle</th>
+            <th>ReleaseYear</th>
+            <th>Country</th>
+            <th>DirectorName</th>
+            <th>ImdbRating</th>
+            <th>Vote</th>
+        </tr>
+        {% for row in results %}
+        <tr>
+            <td>{{row[0]}}</td>
+            <td>{{row[1]}}</td>
+            <td>{{row[2]}}</td>
+            <td>{{row[3]}}</td>
+            <td>{{row[4]}}</td>
+            <td>{{row[5]}}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    <a href='/'>Back to home page</a>
+</body>
+</html>
